@@ -1,0 +1,260 @@
+#!/bin/bash
+## 
+## CONTRIBUTORS: 
+## 
+##     * Gabriel Gonzalez (gabeg@bu.edu) 
+## 
+## 
+## LICENSE: 
+## 
+##     The MIT License (MIT)
+## 
+## 
+## NAME:
+## 
+##     del - Delete files to the trash can.
+## 
+## 
+## SYNTAX: 
+## 
+##     del [-h] [--setup] [-s] [-r <file>] [<files>]
+## 
+## 
+## PURPOSE:
+## 
+##     A trash can for Linux systems so that files are not deleted forever.
+## 
+## 
+## OPTIONS:
+## 
+##     -h
+##         Print program usage.
+## 
+##     --setup
+##         Setup a new trash can location by giving a directory path.
+##     -s
+##         Print the size of the trash can.
+## 
+##     -r, --rec <file>
+##         Recovery system for deleted files.
+## 
+##     <files>
+##         Delete specified files.
+## 
+## 
+## FUNCTIONS:
+## 
+##     print_usage  - Print program usage.
+## 
+##     recover_file - Recover the specified file.
+##     delete_files - Deleted the specified files.
+## 
+## 
+## FILE STRUCTURE:
+## 
+##     * Print Program Usage
+##     * Recover and Delete Files
+##     * Trash Program Options
+## 
+## 
+## MODIFICATION HISTORY:
+## 	
+##     gabeg Sep 19 2013 <> Created.
+## 
+##     gabeg Jul 01 2014 <> Added functions to increase readability
+## 
+##     gabeg Jan 01 2015 <> Removed "print_trash_size", "backup_file_check", 
+##                          "is_file", and "is_directory". Changed "help_screen" to
+##                          "print_usage". Added the "-r" option which also enables
+##                          file recovery.
+## 
+##     gabeg Jan 14 2015 <> Added a "--setup" option so that the trash can location 
+##                          is not hardcoded, and can be modified on the fly.
+## 
+## **********************************************************************************
+
+
+
+## ================
+## GLOBAL VARIABLES
+## ================
+
+## Program information
+ARGV=("$@")
+PROG_NAME=`basename $0`
+
+PROG_PATH_LEN=${#0}
+PROG_NAME_LEN=${#PROG_NAME}
+PROG_DIR_LEN=$[ ${PROG_PATH_LEN} - ${PROG_NAME_LEN} - 1 ]
+
+PROG_PATH="${0:0:${PROG_DIR_LEN}}"
+
+## Array delimeter
+IFS=$'\n'
+
+## Directory locations
+TRASH_PREF="${PROG_PATH}/log/trash.pref"
+TRASH_DIR=`head -1 "${TRASH_PREF}" | sed 's/\/$//'`
+
+
+
+## ###############################
+## ##### PRINT PROGRAM USAGE #####
+## ###############################
+
+## Displays the help screen
+function print_usage {
+    echo "Usage: del [-h] [--setup] [-s] [-r <file>] [<files>]"
+    exit 1
+}
+
+
+
+## ####################################
+## ##### RECOVER AND DELETE FILES #####
+## ####################################
+
+## Recover the specified file
+function recover_file {
+    
+    echo ":: Recovery service"
+    
+    ## File matches
+    local file="${ARGV[1]}"
+    local matches=(`ls -1 "${TRASH_DIR}" | grep --color=never -i "${file}"`)
+    
+    ## Number of matches
+    local n=${#matches[@]}
+    local last=$[ ${n} - 1 ]
+    
+    if [ ${n} -eq 0 ]; then
+        echo "${PROG_NAME}: No files matching '${file}' found."
+        exit 1
+    fi
+    
+    ## Name match and time of deletion 
+    local names=(`echo "${matches[*]}" | cut -f1 -d'<'`)
+    local times=(`echo "${matches[*]}" | cut -f2 -d'>' \
+                        | sed -e 's/Jan/Jan /' -e 's/Feb/Feb /' -e 's/Mar/Mar /' \
+                              -e 's/Apr/Apr /' -e 's/May/May /' -e 's/Jun/Jun /' \
+                              -e 's/Jul/Jul /' -e 's/Aug/Aug /' -e 's/Sep/Sep /' \
+                              -e 's/Oct/Oct /' -e 's/Nov/Nov /' -e 's/Dec/Dec /' \
+                        | sed 's/--/ - /'`)
+    
+    ## Prompt user which file to recover
+    echo "Which file would you like to recover?"
+    
+    for i in `seq 0 ${last}`; do
+        j=$[ ${i} + 1 ]
+        echo -e "${j}: ${names[${i}]} \t ${times[${i}]}" \
+            | GREP_COLORS='mt=00;32' \
+              grep --color=always -E '^.*: '
+    done
+    
+    read -p '> ' ans
+    
+    ## Make sure user input was valid
+    if [[ "${ans}" == '' ]] || [ ${ans} -le 0 -o ${ans} -gt ${n} ]; then
+        echo "${PROG_NAME}: Value '${ans}' is invalid."
+        exit 1
+    fi
+    
+    ## Recover file
+    local k=$[ ${ans} - 1]
+    local item="${names[${k}]}"
+    
+    echo -n ":: Transferring '${item}' to current directory..."
+    mv "${TRASH_DIR}/${matches[${k}]}" "${item}"
+    echo "Done"
+}
+
+
+
+## Delete the specified files
+function delete_files {
+    
+    ## Current time
+    local curr=`date +%b%d--%H:%M:%S`
+    
+    ## Loop through files to delete
+    for i in "${ARGV[@]}"; do
+        
+        ## Skip over empty items
+        if [[ "${i}" == "" ]]; then continue; fi
+                
+        ## File/directory check
+        if [ -f "${i}" ] || [ -d "${i}" ]; then
+            
+            ## Remove '/' from end of directory name               
+            if [ -d "${i}" ]; then i=`echo "${i}" | sed -e 's/\/$//'`; fi
+            
+            ## Item to be deleted
+            local name="${i}"
+            local new="${i}<>${curr}"
+            
+            ## Move the file to the trash with new name
+            echo -n ":: Deleting ${name}..." 
+            mv "${name}" "${TRASH_DIR}/${new}" 
+            echo "Done"
+        else
+            echo -e "${PROG_NAME}: File '${i}' does not exist."
+            exit 1
+        fi
+    done
+}
+
+
+
+## #################################
+## ##### TRASH PROGRAM OPTIONS #####
+## #################################
+
+## Main function
+function main {
+    
+    ## Check user input
+    case "${ARGV[0]}" in
+        
+        ## Print Size of trash can
+        "-h") 
+            print_usage
+            ;;
+        
+        ## Setup trash can
+        "--setup")
+            echo "Where is the trash can located?"
+            read -p "> " ans
+            
+            echo "${ans}" > "${TRASH_PREF}"
+            echo -e "\n:: Setting new trash can location...Done"
+            ;;
+        
+        ## Print Size of trash can
+        "-s") 
+            local size=`du -sh "${TRASH_DIR}" | cut -f1 -d'/'`
+            echo "Trash Size:" "${size}"
+            ;;
+        
+        ## Checks If There Are Backup Files
+        "*~")
+            [ ! -f "*~" ] && echo "${PROG_NAME}: No backup files found." && exit 1
+            ;;
+        
+        ## Recovers Deleted Files
+        "-r"|"--rec")
+            recover_file 
+            ;;
+        
+        ## Delete Files and If Necessary Print Syntax Error
+        *) 
+            delete_files
+            ;;
+    esac
+    
+    exit 0
+}
+
+
+
+## Execute trash program 
+main 
