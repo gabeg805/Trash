@@ -104,7 +104,7 @@ TRASH_DIR=`head -1 "${TRASH_PREF}" | sed 's/\/$//'`
 
 ## Displays the help screen
 function print_usage {
-    echo "Usage: del [-h] [--setup] [-s] [-r <file>] [<files>]"
+    echo "Usage: ${PROG_NAME} [-h] [--setup] [-s] [-r <file>] [<files>]"
     exit 1
 }
 
