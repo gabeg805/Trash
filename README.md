@@ -2,7 +2,7 @@
 What is it?
 ===========
 
-Delete files to the trash can and recover them using a simple interface, if needed.
+Delete files to the trash can and recover files from the trash can.
 
 
 
