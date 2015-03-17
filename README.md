@@ -22,7 +22,7 @@ Setup a new trash can location, and update your PATH environment variable in you
 shell rc file with:
     
     $ ./del --setup
-    $ export PATH="${PATH}":"/PATH/TO/PROGRAM/del
+    $ export PATH="${PATH}":"/PATH/TO/PROGRAM/del"
 
 Now the program is ready for use!
 
