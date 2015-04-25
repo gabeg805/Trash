@@ -71,6 +71,9 @@
 ##     gabeg Jan 14 2015 <> Added a "--setup" option so that the trash can location 
 ##                          is not hardcoded, and can be modified on the fly.
 ## 
+##     gabeg Apr 25 2015 <> On recovery, directories are a appended with a '/'. 
+##                          Updated input validity on recovery.
+## 
 ## **********************************************************************************
 
 
@@ -120,12 +123,12 @@ function recover_file {
     echo ":: Recovery service"
     
     ## File matches
-    local file="${ARGV[1]}"
-    local matches=(`ls -1 "${TRASH_DIR}" | grep --color=never -i "${file}"`)
+    file="${ARGV[1]}"
+    matches=(`ls -1 -A "${TRASH_DIR}" | grep --color=never -i "${file}"`)
     
     ## Number of matches
-    local n=${#matches[@]}
-    local last=$[ ${n} - 1 ]
+    n=${#matches[@]}
+    last=$[ ${n} - 1 ]
     
     if [ ${n} -eq 0 ]; then
         echo "${PROG_NAME}: No files matching '${file}' found."
@@ -133,8 +136,8 @@ function recover_file {
     fi
     
     ## Name match and time of deletion 
-    local names=(`echo "${matches[*]}" | cut -f1 -d'<'`)
-    local times=(`echo "${matches[*]}" | cut -f2 -d'>' \
+    names=(`echo "${matches[*]}" | cut -f1 -d'<'`)
+    times=(`echo "${matches[*]}" | cut -f2 -d'>' \
                         | sed -e 's/Jan/Jan /' -e 's/Feb/Feb /' -e 's/Mar/Mar /' \
                               -e 's/Apr/Apr /' -e 's/May/May /' -e 's/Jun/Jun /' \
                               -e 's/Jul/Jul /' -e 's/Aug/Aug /' -e 's/Sep/Sep /' \
@@ -146,7 +149,11 @@ function recover_file {
     
     for i in `seq 0 ${last}`; do
         j=$[ ${i} + 1 ]
-        echo -e "${j}: ${names[${i}]} \t ${times[${i}]}" \
+        item="${names[${i}]}"
+        
+        if [ -d "${TRASH_DIR}/${matches[${i}]}" ]; then item="${item}/"; fi
+        
+        echo -e "${j}: ${item} \t ${times[${i}]}" \
             | GREP_COLORS='mt=00;32' \
               grep --color=always -E '^.*: '
     done
@@ -154,14 +161,21 @@ function recover_file {
     read -p '> ' ans
     
     ## Make sure user input was valid
-    if [[ "${ans}" == '' ]] || [ ${ans} -le 0 -o ${ans} -gt ${n} ]; then
+    flag=false
+    
+    if [ "${ans}" -eq "${ans}" ] 2> /dev/null; then 
+        :
+    else 
+        flag=true
+    fi
+    if "${flag}" || [[ "${ans}" == '' ]] || [ "${ans}" -le 0 -o "${ans}" -gt "${n}" ]; then
         echo "${PROG_NAME}: Value '${ans}' is invalid."
         exit 1
     fi
     
     ## Recover file
-    local k=$[ ${ans} - 1]
-    local item="${names[${k}]}"
+    k=$[ ${ans} - 1]
+    item="${names[${k}]}"
     
     echo -n ":: Transferring '${item}' to current directory..."
     mv "${TRASH_DIR}/${matches[${k}]}" "${item}"
@@ -174,7 +188,7 @@ function recover_file {
 function delete_files {
     
     ## Current time
-    local curr=`date +%b%d--%H:%M:%S`
+    curr=`date +%b%d--%H:%M:%S`
     
     ## Loop through files to delete
     for i in "${ARGV[@]}"; do
@@ -189,8 +203,8 @@ function delete_files {
             if [ -d "${i}" ]; then i=`echo "${i}" | sed -e 's/\/$//'`; fi
             
             ## Item to be deleted
-            local name="${i}"
-            local new="${i}<>${curr}"
+            name="${i}"
+            new="${i}<>${curr}"
             
             ## Move the file to the trash with new name
             echo -n ":: Deleting ${name}..." 
@@ -231,7 +245,7 @@ function main {
         
         ## Print Size of trash can
         "-s") 
-            local size=`du -sh "${TRASH_DIR}" | cut -f1 -d'/'`
+            size=`du -sh "${TRASH_DIR}" | cut -f1 -d'/'`
             echo "Trash Size:" "${size}"
             ;;
         
