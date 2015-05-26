@@ -10,7 +10,8 @@ Delete files to the trash can and recover files from the trash can.
 Documentation
 =============
 
-Program documentation can be found in the header of the program.
+Program documentation can be found in the header of the program as well as the usage
+message.
 
 
 
