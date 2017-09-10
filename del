@@ -1,263 +1,364 @@
 #!/bin/bash
-## **********************************************************************************
-## 
-## Name:    del
-## Author:  Gabriel Gonzalez
-## Email:   gabeg@bu.edu
-## License: The MIT License (MIT)
-## 
-## Syntax: del [option] <argument>
-##         
-## Description: Delete files and move them to the trash can, that way files are not
-##              deleted forever.
-##              
-## Notes: None.
-## 
-## **********************************************************************************
+# ******************************************************************************
+# 
+# Name:    del
+# Author:  Gabriel Gonzalez
+# Email:   gabeg@bu.edu
+# License: The MIT License (MIT)
+# 
+# Syntax: del [option] <args>
+#         
+# Description: Delete files and move them to the trash can, that way files are
+#              not deleted forever.
+#              
+# Notes: None.
+# 
+# ******************************************************************************
 
+# Globals
+PROG="${0##*/}"
+PROGDIR=$(dirname "$(readlink -f "${0}")")
+TRASHDIR="${HOME}/.local/share/trash"
 
+# Options
+VERBOSE=true
 
-## ================
-## GLOBAL VARIABLES
-## ================
+# Source utility
+. "${PROGDIR}"/../lib/bash/util.sh
 
-## Program information
-ARGV=("$@")
-PROG_NAME=`basename $0`
-PROG_DIR=`echo "$0" | sed "s/\/${PROG_NAME}$//"`
+# Exit statuses
+ERECVR=10
 
-IFS=$'\n'
-TRASH_DIR=`head -1 "${PROG_DIR}/trash.config" | sed 's/\/$//'`
+# ******************************************************************************
+# Main
+main()
+{
+    [ $# -eq 0 ] && usage && exit 0
 
+    short="hqd:r:sl"
+    long="help,quiet,install,uninstall,delete,recover,size,list,empty"
+    args=$(getopt -o "${short}" --long "${long}" --name "${PROG}" -- "${@}")
 
+    [ $? -ne 0 ] && usage && exit 1
+    eval set -- "${args}"
 
-## #################################
-## ##### TRASH PROGRAM OPTIONS #####
-## #################################
+    # Options
+    local INSTALL=
+    local UNINSTALL=
+    local DELETE=
+    local RECOVER=
+    local SIZE=
+    local LIST=
+    local EMPTY=
+    local FILE=
+    local PARSED=
 
-## Main function
-main() {
-    case "${ARGV[0]}" in
-        ""|"-h"|"--help") 
-            usage
-            exit 0
-            ;;
-        "--setup")
-            echo "Where is the trash can located?"
-            read -p "> " ans
-            
-            if [ -z "${ans}" ]; then 
-                echo "${PROG_NAME}: No path specified. Skipping trash can setup."
+    # Parse options
+    while true; do
+        case "${1}" in
+            # Usage
+            -h|--help)
+                usage
                 exit 0
-            fi
-            
-            if [ -d "${ans}" ]; then
-                echo "${ans}" > "${TRASH_PREF}"
-                echo 
-                echo ":: Setting new trash can location...Done."
-            else
-                echo "${PROG_NAME}: Directory '${ans}' does not exist." 1>&2
-                exit 1
-            fi
-            
-            exit 0
+                ;;
+
+            # Quiet
+            -q|--quiet)
+                VERBOSE=
+                ;;
+
+            # Install
+            --install)
+                INSTALL=true
+                check_multi_arg "${INSTALL}" "install trash can"
+                ;;
+
+            # Uninstall
+            --uninstall)
+                UNINSTALL=true
+                check_multi_arg "${UNINSTALL}" "uninstall trash can"
+                ;;
+
+            # Delete file(s)
+            -d|--delete)
+                shift
+                DELETE=true
+                FILE=("${@}")
+                check_multi_arg "${DELETE}" "delete file(s)"
+                ;;
+
+            # Recover file
+            -r|--recover)
+                shift
+                RECOVER=true
+                FILE="${1}"
+                check_multi_arg "${RECOVER}" "recover a file"
+                ;;
+
+            # Size of trash
+            -s|--size)
+                SIZE=true
+                check_multi_arg "${SIZE}" "display size of trash"
+                ;;
+
+            # List trash contents
+            -l|--list)
+                LIST=true
+                check_multi_arg "${LIST}" "list trash can contents"
+                ;;
+
+            # Empty trash
+            --empty)
+                EMPTY=true
+                check_multi_arg "${EMPTY}" "empty trash can"
+                ;;
+
+            # End of options
+            --)
+                break
+                ;;
+        esac
+        shift
+        PARSED=true
+    done
+
+    # Run options
+    if [ -z "${PARSED}" ]; then
+        print_err "No options specified. See '--help' for more information."
+        exit ${EARG}
+    elif [ -n "${INSTALL}" ]; then
+        run_install
+    elif [ -n "${UNINSTALL}" ]; then
+        run_uninstall
+    elif [ -n "${DELETE}" ]; then
+        delete_files "${FILE[@]}"
+    elif [ -n "${RECOVER}" ]; then
+        recover_file "${FILE}"
+    elif [ -n "${SIZE}" ]; then
+        print_trash_size
+    elif [ -n "${LIST}" ]; then
+        list_trash_contents
+    elif [ -n "${EMPTY}" ]; then
+        empty_trash
+    else
+        :
+    fi
+}
+
+# ******************************************************************************
+# Print program usage
+usage()
+{
+    echo "Usage: ${PROG} [options] <args>"
+    echo
+    echo "Options:"
+    echo "    -h, --help"
+    echo "        Print program usage."
+    echo
+    echo "    -v, --verbose"
+    echo "        Verbose output."
+    echo
+    echo "    -d, --delete <file(s)>"
+    echo "        Delete one or more files."
+    echo
+    echo "    -r, --recover <file>"
+    echo "        Recover a file from the trash can."
+    echo
+    echo "    -s, --size"
+    echo "        Display the size of the trash can."
+    echo
+    echo "Arguments:"
+    echo "    <file>"
+    echo "        File to recover."
+    echo
+    echo "    <file(s)>"
+    echo "        One or more files to delete."
+}
+
+# ******************************************************************************
+# Install
+run_install()
+{
+    print_info "Installing trash can..."
+    mkdir -p "${TRASHDIR}"
+}
+
+# ******************************************************************************
+# Uninstall
+run_uninstall()
+{
+    print_info "Uninstalling trash can..."
+    rm -rf "${TRASHDIR}"
+}
+
+# ******************************************************************************
+# Delete file(s)
+delete_files()
+{
+    local dir="${TRASHDIR}/$(date +%Y-%m-%d)"
+    local now=$(date +%H%M%S)
+
+    for f in "${@}"; do
+        # Check file/directory
+        if [ "${f}" == "--" ]; then
+            continue
+        fi
+        if [ ! -e "${f}" ]; then
+            print_err "Skipping '${f}': File does not exist."
+            continue
+        fi
+
+        # Move to trash
+        if [ ! -d "${dir}" ]; then
+            mkdir -p "${dir}"
+        fi
+
+        print_info "Deleting '${f}'..."
+        mv "${f}" "${dir}/$(basename "${f}")-${now}"
+    done
+}
+
+# ******************************************************************************
+# Recover a file
+recover_file()
+{
+    local file="${1}"
+    local IFS=$'\n'
+    local matches=
+
+    # Check matches
+    matches=($(get_recovery_matches "${file}"))
+    if [ $? -ne 0 ]; then
+        print_err "No files matching '${ARGV[1]}' found."
+        exit ${ERECVR}
+    fi
+
+    # Prompt for file to recover
+    echo "Which file would you like to recover?"
+    echo
+    echo "${matches[*]}"
+    read -p "> " ans
+
+    # Check input values
+    if [ -z "${ans}" ]; then
+        print_info "Exiting..."
+        exit ${ENORM}
+    fi
+    if is_integer "${ans}" && \
+        [ ${ans} -ge 1 -a ${ans} -le ${#matches[@]} ]
+    then
+        :
+    else
+        print_err "Unable to recover file: Invalid value entered."
+        exit ${ERECVR}
+    fi
+
+    # Recover file
+    local line="${matches[$[${ans}-1]]}"
+    local dir=$(echo "${line}" | awk '{ print $2 }')
+    local IFS=$'|'
+    local linesplit=(${line})
+    local trashfile=$(echo "${linesplit[1]:1}" | cut -f1 -d'/')
+    local recfile="${trashfile:0:$[${#trashfile}-7]}"
+
+    print_out 
+    print_info "Recovering '${trashfile}'..."
+    mv "${TRASHDIR}/${dir}/${trashfile}" ./"${recfile}"
+}
+
+# ******************************************************************************
+# Print trash can size
+print_trash_size()
+{
+    echo "Trash Size: $(get_trash_size)"
+}
+
+# ******************************************************************************
+# List trash can contents
+list_trash_contents()
+{
+    builtin cd "${TRASHDIR}"
+    find *
+}
+
+# ******************************************************************************
+# Empty trash can
+empty_trash()
+{
+    echo "Are you sure you want to empty the trash can?"
+    read -p "> " ans
+
+    case "${ans}" in
+        y|Y|yes|Yes|YES)
+            print_info "Emptying trash can..."
+            rm -rf "${TRASHDIR}"/*
             ;;
-        "-s"|"--size") 
-            size=`du -sh "${TRASH_DIR}" | cut -f1 -d'/'`
-            echo "Trash Size:" "${size}"
-            exit 0
-            ;;
-        "*~")
-            if [ ! -f "*~" ]; then
-                echo "${PROG_NAME}: No backup files found." 1>&2
-                exit 1
-            fi
-            ;;
-        "-r"|"--rec"|"--recover")
-            recover_file
-            exit 0
-            ;;
-        *) 
-            delete_files 
-            exit 0
+
+        *)
+            print_info "Exiting..."
+            exit ${ENORM}
             ;;
     esac
 }
 
-
-
-## ###############################
-## ##### PRINT PROGRAM USAGE #####
-## ###############################
-
-## Displays the help screen
-usage() {
-    echo "Usage: ${PROG_NAME} [option] <argument>"
-    echo 
-    echo "Options:"
-    echo "    --setup                        Setup the trash can path"
-    echo "    -s, --size                     Display the size of the trash can"
-    echo "    -r, --rec, --recover <file>    Recover a file from the trash can"
-    echo 
-    echo "Arguments:"
-    echo "    <file>                         Input file to recover"
-    echo "    <file(s)>                      File(s) to delete"
+# ******************************************************************************
+# Return size of trash
+get_trash_size()
+{
+    du -sh "${TRASHDIR}" 2> /dev/null | awk '{ print $1 }'
 }
 
+# *******************************************************************************
+# Display file recovery matches
+get_recovery_matches()
+{
+    local file="${1}"
+    local IFS=$'\n'
+    local matches=($(get_file_matches "${1}"))
 
+    # Check matches
+    if [ ${#matches[@]} -eq 0 ]; then
+        return ${ERECVR}
+    fi
 
-## ####################################
-## ##### RECOVER AND DELETE FILES #####
-## ####################################
+    # Print matches
+    local i=1
+    local offset=11
+    local timestamp=
+    local tt=
+    local name=
 
-## Delete the specified file(s)
-delete_files() {
-    now=`date +%b%d--%H:%M:%S`
-    
-    ## Loop through files to delete
-    for i in "${ARGV[@]}"; do
-        if [[ "${i}" == "" ]]; then 
-            continue
-        fi
-        
-        ## File/directory check
-        if [ -f "${i}" ] || [ -d "${i}" ]; then
-            if [ -d "${i}" ]; then 
-                i=`echo "${i}" | sed -e 's/\/$//'`
-            fi
-            
-            echo -n ":: Deleting ${i}..." 
-            mv "${i}" "${TRASH_DIR}/${i}<>${now}" 
-            echo "Done"
-        else
-            echo -e "${PROG_NAME}: File '${i}' does not exist." 1>&2
-            exit 1
-        fi
+    for f in "${matches[@]}"; do
+        name=$(echo "${f:${offset}}" | cut -f1 -d'/')
+        tt="${name:$[${#name}-6]:6}"
+        timestamp="${f:0:10} ${tt:0:2}:${tt:2:2}:${tt:4:2}"
+        printf "%d: %s | %s\n" "${i}" "${timestamp}" "${f:${offset}:$[${#f}-${offset}]}"
+        i=$[ ${i} + 1 ]
     done
 }
 
-
-
-## Recover the specified file
-recover_file() {
-    
-    ## Display matches
-    display_recovery_matches
-    read -p '> ' ans
-    
-    if [ -z "${ans}" ]; then
-        echo "${PROG_NAME}: No value specified. Skipping file recovery."
-        exit 0
-    fi
-    
-    if "$(is_valid_index "${ans}")"; then
-        echo "${PROG_NAME}: Value '${ans}' is invalid." 1>&2
-        exit 1
-    fi
-    
-    ## Recover file
-    matches=(`get_matches`)
-    names=(`echo "${matches[*]}" | cut -f1 -d'<'`)
-    i=$[ ${ans} - 1]
-    item="${names[${i}]}"
-    
-    echo 
-    echo -n ":: Transferring '${item}' to current directory..."
-    mv "${TRASH_DIR}/${matches[${i}]}" "${item}"
-    echo "Done"
+# ******************************************************************************
+# Return files that match recovery file
+get_file_matches()
+{
+    builtin cd "${TRASHDIR}"
+    find * -name "*${1}*"
 }
 
+# ******************************************************************************
+# Check if multiple arguments are used when they should not be
+check_multi_arg()
+{
+    local opt="${1}"
+    local desc="${2}"
+    local args="${INSTALL}${UNINSTALL}${DELETE}${RECOVER}${SIZE}${LIST}${EMPTY}"
 
-
-## Display file recovery matches
-display_recovery_matches() {
-    
-    ## File matches
-    if [ -z "${ARGV[1]}" ]; then
-        echo "${PROG_NAME}: No file specified. Skipping file recovery." 
-        exit 0
+    if [ "${opt}" != "${args}" ]; then
+        print_err "Unable to ${desc}: Must specify only one option."
+        exit ${EARGS}
     fi
-    
-    matches=(`get_matches`)
-    n=${#matches[@]}
-    last=$[ ${n} - 1 ]
-    
-    if [ ${n} -eq 0 ]; then
-        echo "${PROG_NAME}: No files matching '${ARGV[1]}' found." 1>&2
-        exit 1
-    fi
-    
-    ## Name match and time of deletion 
-    names=(`echo "${matches[*]}" | cut -f1 -d'<'`)
-    times=(`echo "${matches[*]}" | cut -f2 -d'>' \
-                        | sed -e 's/Jan/Jan /' -e 's/Feb/Feb /' -e 's/Mar/Mar /' \
-                              -e 's/Apr/Apr /' -e 's/May/May /' -e 's/Jun/Jun /' \
-                              -e 's/Jul/Jul /' -e 's/Aug/Aug /' -e 's/Sep/Sep /' \
-                              -e 's/Oct/Oct /' -e 's/Nov/Nov /' -e 's/Dec/Dec /' \
-                        | sed 's/--/ - /'`)
-    
-    ## Get string padding
-    len=0
-    for i in `seq 0 ${last}`; do
-        j=$[ ${i} + 1 ]
-        item="${names[${i}]}"
-        
-        if [ ${#item} -gt ${len} ]; then len=$[ ${#item} + 3 ]; fi
-    done
-    
-    ## Display file matches
-    echo "Which file would you like to recover?"
-    
-    for i in `seq 0 ${last}`; do
-        j=$[ ${i} + 1 ]
-        item="${names[${i}]}"
-        
-        if [ -d "${TRASH_DIR}/${matches[${i}]}" ]; then 
-            item="${item}/"
-        fi
-        
-        printf "%s: %-${len}s %s" "${j}" "${item}" "${times[${i}]}" \
-            | GREP_COLORS='mt=00;32' \
-              grep --color=always -E '^.*: '
-    done
 }
 
-
-
-## ###################################
-## ##### FILE RECOVERY UTILITIES #####
-## ###################################
-
-## Return files that match recovery file
-get_matches() {
-    ls -1 -A "${TRASH_DIR}" | grep --color=never -i "${ARGV[1]}"
-}
-
-
-
-## Check if match array index is valid
-is_valid_index() {
-    matches=(`get_matches`)
-    n=${#matches[@]}
-    flag=false
-    
-    if [ "$1" -eq "$1" ] 2> /dev/null; then 
-        :
-    else 
-        flag=true
-    fi
-    
-    if [ "$1" -le 0 -o "$1" -gt "${n}" ]; then
-        flag=true
-    fi
-    
-    echo "${flag}"
-}
-
-
-
-## ============
-## Execute Main
-## ============
- 
-main 
+# ******************************************************************************
+# Execute main
+main "${@}"
