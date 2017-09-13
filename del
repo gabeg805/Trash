@@ -24,7 +24,7 @@ TRASHDIR="${HOME}/.local/share/trash"
 VERBOSE=true
 
 # Source utility
-. "${PROGDIR}"/../lib/bash/util.sh
+. "${PROGDIR}/../lib/bash/util.sh"
 
 # Exit statuses
 ERECVR=10
