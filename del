@@ -33,14 +33,21 @@ ERECVR=10
 # Main
 main()
 {
-    [ $# -eq 0 ] && usage && exit 0
+    # No arguments
+    if [ $# -eq 0 ]; then
+        usage
+        exit 0
+    fi
 
     short="hqd:r:sl"
     long="help,quiet,install,uninstall,delete,recover,size,list,empty"
-    args=$(getopt -o "${short}" --long "${long}" --name "${PROG}" -- "${@}")
+    opts=$(getopt -o "${short}" --long "${long}" --name "${PROG}" -- "${@}")
 
-    [ $? -ne 0 ] && usage && exit 1
-    eval set -- "${args}"
+    # Invalid arguments
+    if [ $? -ne 0 ]; then
+        usage
+        exit 1
+    fi
 
     # Options
     local INSTALL=
@@ -54,6 +61,7 @@ main()
     local PARSED=
 
     # Parse options
+    eval set -- "${opts}"
     while true; do
         case "${1}" in
             # Usage
@@ -179,7 +187,7 @@ usage()
 # Install
 run_install()
 {
-    print_info "Installing trash can..."
+    print_info "Installing trash can at: '${TRASHDIR}'."
     mkdir -p "${TRASHDIR}"
 }
 
@@ -187,7 +195,7 @@ run_install()
 # Uninstall
 run_uninstall()
 {
-    print_info "Uninstalling trash can..."
+    print_info "Uninstalling trash can at: '${TRASHDIR}'."
     rm -rf "${TRASHDIR}"
 }
 
