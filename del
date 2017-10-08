@@ -27,7 +27,8 @@ VERBOSE=true
 . "${PROGDIR}/../lib/bash/util.sh"
 
 # Exit statuses
-ERECVR=10
+ENOTRASH=10
+ERECVR=11
 
 # ******************************************************************************
 # Main
@@ -143,22 +144,29 @@ main()
         exit ${EARG}
     elif [ -n "${INSTALL}" ]; then
         run_install
-    elif [ -n "${UNINSTALL}" ]; then
-        run_uninstall
-    elif [ -n "${EMPTY}" ]; then
-        empty_trash
-    elif [ -n "${DELETE}" ]; then
-        delete_files "${FILE[@]}"
-    elif [ -n "${RECOVER}" ]; then
-        recover_file "${FILE}"
-    elif [ -n "${PRINT}" ]; then
-        print_trash_dir
-    elif [ -n "${SIZE}" ]; then
-        print_trash_size
-    elif [ -n "${LIST}" ]; then
-        list_trash_contents
     else
-        :
+        if [ ! -d "${TRASHDIR}" ]; then
+            print_err "Trash has not been installed yet. See --install for more info."
+            exit ${ENOTRASH}
+        fi
+
+        if [ -n "${UNINSTALL}" ]; then
+            run_uninstall
+        elif [ -n "${EMPTY}" ]; then
+            empty_trash
+        elif [ -n "${DELETE}" ]; then
+            delete_files "${FILE[@]}"
+        elif [ -n "${RECOVER}" ]; then
+            recover_file "${FILE}"
+        elif [ -n "${PRINT}" ]; then
+            print_trash_dir
+        elif [ -n "${SIZE}" ]; then
+            print_trash_size
+        elif [ -n "${LIST}" ]; then
+            list_trash_contents
+        else
+            :
+        fi
     fi
 }
 
