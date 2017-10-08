@@ -39,8 +39,8 @@ main()
         exit 0
     fi
 
-    short="hqd:r:sl"
-    long="help,quiet,install,uninstall,delete,recover,size,list,empty"
+    short="hqd:r:psl"
+    long="help,quiet,install,uninstall,empty,delete,recover,print,size,list"
     opts=$(getopt -o "${short}" --long "${long}" --name "${PROG}" -- "${@}")
 
     # Invalid arguments
@@ -52,11 +52,12 @@ main()
     # Options
     local INSTALL=
     local UNINSTALL=
+    local EMPTY=
     local DELETE=
     local RECOVER=
+    local PRINT=
     local SIZE=
     local LIST=
-    local EMPTY=
     local FILE=
     local PARSED=
 
@@ -87,6 +88,12 @@ main()
                 check_multi_arg "${UNINSTALL}" "uninstall trash can"
                 ;;
 
+            # Empty trash
+            --empty)
+                EMPTY=true
+                check_multi_arg "${EMPTY}" "empty trash can"
+                ;;
+
             # Delete file(s)
             -d|--delete)
                 shift
@@ -103,6 +110,12 @@ main()
                 check_multi_arg "${RECOVER}" "recover a file"
                 ;;
 
+            # Print location of trash
+            -p|--print)
+                PRINT=true
+                check_multi_arg "${PRINT}" "print location of trash"
+                ;;
+
             # Size of trash
             -s|--size)
                 SIZE=true
@@ -113,12 +126,6 @@ main()
             -l|--list)
                 LIST=true
                 check_multi_arg "${LIST}" "list trash can contents"
-                ;;
-
-            # Empty trash
-            --empty)
-                EMPTY=true
-                check_multi_arg "${EMPTY}" "empty trash can"
                 ;;
 
             # End of options
@@ -138,16 +145,18 @@ main()
         run_install
     elif [ -n "${UNINSTALL}" ]; then
         run_uninstall
+    elif [ -n "${EMPTY}" ]; then
+        empty_trash
     elif [ -n "${DELETE}" ]; then
         delete_files "${FILE[@]}"
     elif [ -n "${RECOVER}" ]; then
         recover_file "${FILE}"
+    elif [ -n "${PRINT}" ]; then
+        print_trash_dir
     elif [ -n "${SIZE}" ]; then
         print_trash_size
     elif [ -n "${LIST}" ]; then
         list_trash_contents
-    elif [ -n "${EMPTY}" ]; then
-        empty_trash
     else
         :
     fi
@@ -163,17 +172,32 @@ usage()
     echo "    -h, --help"
     echo "        Print program usage."
     echo
-    echo "    -v, --verbose"
-    echo "        Verbose output."
+    echo "    -q, --quiet"
+    echo "        Quiet output."
+    echo
+    echo "    --install"
+    echo "        Install trash."
+    echo
+    echo "    --uninstall"
+    echo "        Uninstall trash."
+    echo
+    echo "    --empty"
+    echo "        Empty the trash."
     echo
     echo "    -d, --delete <file(s)>"
     echo "        Delete one or more files."
     echo
     echo "    -r, --recover <file>"
-    echo "        Recover a file from the trash can."
+    echo "        Recover a file from trash."
+    echo
+    echo "    -p, --print"
+    echo "        Print location of trash."
     echo
     echo "    -s, --size"
-    echo "        Display the size of the trash can."
+    echo "        Display size of trash."
+    echo
+    echo "    -l, --list"
+    echo "        List contents of trash."
     echo
     echo "Arguments:"
     echo "    <file>"
@@ -197,6 +221,26 @@ run_uninstall()
 {
     print_info "Uninstalling trash can at: '${TRASHDIR}'."
     rm -rf "${TRASHDIR}"
+}
+
+# ******************************************************************************
+# Empty trash can
+empty_trash()
+{
+    echo "Are you sure you want to empty the trash can?"
+    read -p "> " ans
+
+    case "${ans}" in
+        y|Y|yes|Yes|YES)
+            print_info "Emptying trash can."
+            rm -rf "${TRASHDIR}"/*
+            ;;
+
+        *)
+            print_info "Exiting."
+            exit ${ENORM}
+            ;;
+    esac
 }
 
 # ******************************************************************************
@@ -275,38 +319,25 @@ recover_file()
 }
 
 # ******************************************************************************
-# Print trash can size
+# Print trash directory
+print_trash_dir()
+{
+    echo "Trash Directory: '${TRASHDIR}'"
+}
+
+# ******************************************************************************
+# Print trash size
 print_trash_size()
 {
     echo "Trash Size: $(get_trash_size)"
 }
 
 # ******************************************************************************
-# List trash can contents
+# List trash contents
 list_trash_contents()
 {
     builtin cd "${TRASHDIR}"
     find *
-}
-
-# ******************************************************************************
-# Empty trash can
-empty_trash()
-{
-    echo "Are you sure you want to empty the trash can?"
-    read -p "> " ans
-
-    case "${ans}" in
-        y|Y|yes|Yes|YES)
-            print_info "Emptying trash can."
-            rm -rf "${TRASHDIR}"/*
-            ;;
-
-        *)
-            print_info "Exiting."
-            exit ${ENORM}
-            ;;
-    esac
 }
 
 # ******************************************************************************
@@ -359,7 +390,7 @@ check_multi_arg()
 {
     local opt="${1}"
     local desc="${2}"
-    local args="${INSTALL}${UNINSTALL}${DELETE}${RECOVER}${SIZE}${LIST}${EMPTY}"
+    local args="${INSTALL}${UNINSTALL}${EMPTY}${DELETE}${RECOVER}${PRINT}${SIZE}${LIST}"
 
     if [ "${opt}" != "${args}" ]; then
         print_err "Unable to ${desc}: Must specify only one option."
