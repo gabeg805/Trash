@@ -1,0 +1,286 @@
+#!/bin/bash
+# ------------------------------------------------------------------------------
+# 
+# Name:    del
+# Author:  Gabriel Gonzalez
+# Email:   gabeg@bu.edu
+# License: The MIT License (MIT)
+# 
+# Syntax: del [option] <args>
+#         
+# Description: Delete files and move them to the trash can, that way files are
+#              not deleted forever.
+#              
+# Notes: None.
+# 
+# ------------------------------------------------------------------------------
+
+##
+# Source utilities.
+##
+. "commandline.sh"
+. "io.sh"
+
+##
+# Directory
+##
+TRASH_SHARE_DIR="${HOME}/.local/share/${PROJECT}"
+
+##
+# Options.
+##
+VERBOSE=true
+
+##
+# Exit statuses.
+##
+ENOTRASH=10
+ERECVR=11
+
+##
+# Trash Can.
+##
+main()
+{
+    cli_options "-h|--help           |Print program usage." \
+                "-d|--delete=files:::|Delete one or more files." \
+                "  |--empty          |Empty the trash can." \
+                "  |--install        |Install the trash can." \
+                "-l|--list           |List the contents of the trash can." \
+                "-L|--location       |Print the location of the trash can." \
+                "-r|--recover=file:  |Recover a file from the trash can." \
+                "-s|--size           |Print the size of the trash can." \
+                "  |--uninstall      |Uninstall the trash can."
+    cli_parse "${@}"
+
+    local help=$(cli_get "help")
+    local delete=$(cli_get "delete")
+    local empty=$(cli_get "empty")
+    local install=$(cli_get "install")
+    local list=$(cli_get "list")
+    local location=$(cli_get "location")
+    local recover=$(cli_get "recover")
+    local size=$(cli_get "size")
+    local uninstall=$(cli_get "uninstall")
+
+    if [ -n "${help}" ]
+    then
+        cli_usage
+    elif [ -n "${install}" ]
+    then
+        trash_install
+    else
+        if [ ! -d "${TRASH_SHARE_DIR}" ]; then
+            print_err "Trash has not been installed yet. See --install for more info."
+            exit ${ENOTRASH}
+        fi
+        if [ -n "${delete}" ]
+        then
+            trash_delete "${delete}"
+        elif [ -n "${empty}" ]
+        then
+            trash_empty
+        elif [ -n "${list}" ]
+        then
+            trash_list
+        elif [ -n "${location}" ]
+        then
+            trash_location
+        elif [ -n "${recover}" ]
+        then
+            :
+        elif [ -n "${size}" ]
+        then
+            trash_size
+        elif [ -n "${uninstall}" ]
+        then
+            trash_uninstall
+        else
+            exit 1
+        fi
+    fi
+    exit $?
+}
+
+##
+# Install the trash can.
+##
+trash_install()
+{
+    print_info "Installing the Trash Can."
+    mkdir -pv "${TRASH_SHARE_DIR}"
+    return $?
+}
+
+##
+# Delete the input file(s) by moving them to the trash can.
+##
+trash_delete()
+{
+    local dest="${TRASH_SHARE_DIR}"/$(date +%Y-%m-%d)
+    local now=$(date +%H%M%S)
+    local IFS=$'|'
+    local args=($(echo "${1}"))
+    local file
+    for file in "${args[@]}"
+    do
+        if [ ! -e "${file}" ]
+        then
+            print_err "File '${file}' does not exist."
+            continue
+        fi
+        if [ ! -d "${dest}" ]
+        then
+            mkdir -p "${dest}"
+        fi
+        print_info "Deleting '${file}'."
+        local name=$(basename "${file}")-"${now}"
+        mv "${file}" "${dest}/${name}"
+    done
+}
+
+##
+# Empty the trash can.
+##
+trash_empty()
+{
+    local response=
+    echo "Are you sure you want to empty the trash can?"
+    read -p "> " response
+    case "${response}" in
+        y|Y|yes|Yes|YES)
+            print_info "Emptying trash can."
+            rm -rfv "${TRASH_SHARE_DIR}"/*
+            ;;
+        *)
+            print_info "Exiting."
+            ;;
+    esac
+    return $?
+}
+
+##
+# List the contents of the trash.
+##
+trash_list()
+{
+    builtin cd "${TRASH_SHARE_DIR}"
+    find *
+}
+
+##
+# Print the location of the trash.
+##
+trash_location()
+{
+    echo "Trash Location: '${TRASH_SHARE_DIR}'"
+}
+
+# ******************************************************************************
+# Recover a file
+recover_file()
+{
+    local file="${1}"
+    local IFS=$'\n'
+    local matches=
+
+    # Check matches
+    matches=($(get_recovery_matches "${file}"))
+    if [ $? -ne 0 ]; then
+        print_err "No files matching '${ARGV[1]}' found."
+        exit ${ERECVR}
+    fi
+
+    # Prompt for file to recover
+    echo "Which file would you like to recover?"
+    echo
+    echo "${matches[*]}"
+    read -p "> " ans
+
+    # Check input values
+    if [ -z "${ans}" ]; then
+        print_info "Exiting."
+        exit ${ENORM}
+    fi
+    if is_integer "${ans}" && \
+        [ ${ans} -ge 1 -a ${ans} -le ${#matches[@]} ]
+    then
+        :
+    else
+        print_err "Unable to recover file: Invalid value entered."
+        exit ${ERECVR}
+    fi
+
+    # Recover file
+    local line="${matches[$[${ans}-1]]}"
+    local dir=$(echo "${line}" | awk '{ print $2 }')
+    local IFS=$'|'
+    local linesplit=(${line})
+    local trashfile=$(echo "${linesplit[1]:1}" | cut -f1 -d'/')
+    local recfile="${trashfile:0:$[${#trashfile}-7]}"
+
+    print_out 
+    print_info "Recovering '${trashfile}'."
+    mv "${TRASH_SHARE_DIR}/${dir}/${trashfile}" ./"${recfile}"
+}
+
+##
+# Print the size of the trash can.
+##
+trash_size()
+{
+    local size=$(du -sh "${TRASH_SHARE_DIR}" 2> /dev/null | awk '{ print $1 }')
+    echo "Trash Size: ${size}"
+    return $?
+}
+
+##
+# Uninstall the trash can.
+##
+trash_uninstall()
+{
+    print_info "Uninstalling trash can at: '${TRASH_SHARE_DIR}'."
+    rm -rf "${TRASH_SHARE_DIR}"
+    return $?
+}
+
+# *******************************************************************************
+# Display file recovery matches
+get_recovery_matches()
+{
+    local file="${1}"
+    local IFS=$'\n'
+    local matches=($(get_file_matches "${1}"))
+
+    # Check matches
+    if [ ${#matches[@]} -eq 0 ]; then
+        return ${ERECVR}
+    fi
+
+    # Print matches
+    local i=1
+    local offset=11
+    local timestamp=
+    local tt=
+    local name=
+
+    for f in "${matches[@]}"; do
+        name=$(echo "${f:${offset}}" | cut -f1 -d'/')
+        tt="${name:$[${#name}-6]:6}"
+        timestamp="${f:0:10} ${tt:0:2}:${tt:2:2}:${tt:4:2}"
+        printf "%d: %s | %s\n" "${i}" "${timestamp}" "${f:${offset}:$[${#f}-${offset}]}"
+        i=$[ ${i} + 1 ]
+    done
+}
+
+# ******************************************************************************
+# Return files that match recovery file
+get_file_matches()
+{
+    builtin cd "${TRASH_SHARE_DIR}"
+    find * -name "*${1}*"
+}
+
+# ******************************************************************************
+# Execute main
+main "${@}"
