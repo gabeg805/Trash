@@ -1,17 +1,11 @@
 #!/bin/bash
 # ------------------------------------------------------------------------------
 # 
-# Name:    del
-# Author:  Gabriel Gonzalez
-# Email:   gabeg@bu.edu
-# License: The MIT License (MIT)
-# 
-# Syntax: del [option] <args>
+# File: trash
+# Author: Gabe Gonzalez
 #         
-# Description: Delete files and move them to the trash can, that way files are
-#              not deleted forever.
-#              
-# Notes: None.
+# Brief: Delete files, list the contents of the trash, recover previously
+#        deleted files, and more.
 # 
 # ------------------------------------------------------------------------------
 
@@ -70,7 +64,8 @@ main()
     then
         trash_install
     else
-        if [ ! -d "${TRASH_SHARE_DIR}" ]; then
+        if [ ! -d "${TRASH_SHARE_DIR}" ]
+        then
             print_err "Trash has not been installed yet. See --install for more info."
             exit ${ENOTRASH}
         fi
@@ -137,6 +132,7 @@ trash_delete()
         local name=$(basename "${file}")-"${now}"
         mv "${file}" "${dest}/${name}"
     done
+    return $?
 }
 
 ##
@@ -166,6 +162,7 @@ trash_list()
 {
     builtin cd "${TRASH_SHARE_DIR}"
     find *
+    return $?
 }
 
 ##
@@ -174,10 +171,12 @@ trash_list()
 trash_location()
 {
     echo "Trash Location: '${TRASH_SHARE_DIR}'"
+    return $?
 }
 
-# ******************************************************************************
-# Recover a file
+##
+# Recover a previously deleted file.
+##
 recover_file()
 {
     local file="${1}"
@@ -281,6 +280,7 @@ get_file_matches()
     find * -name "*${1}*"
 }
 
-# ******************************************************************************
-# Execute main
+##
+# Run the script.
+##
 main "${@}"
