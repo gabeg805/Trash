@@ -1,14 +1,53 @@
-# DEL
+# trash
 
-## What is it?
+## Introduction
 
-Delete files to, recover files from, and print size of the trash can.
+Delete and recover files, print the size and contents of the trash can, and
+more.
 
-## Installation
+## Usage
 
-Installing the trash can simply involves creating the trash directory. To do so, run:
+### Delete files
+
 ```
-$ del --install
+trash -d file1 file2 ...
+```
+
+### Recover a file
+
+```
+trash -r file
+```
+
+### Print size
+
+```
+trash -s
+```
+
+### List contents
+
+```
+trash -l
+```
+
+### Print location of trash can
+
+```
+trash -L
+```
+
+### Empty trash can
+
+```
+trash --empty
+```
+
+## Install
+
+To install the trash can, run the following command:
+```
+trash --install
 ```
 
 This will create the trash directory *${HOME}/.local/share/trash*. If this is
@@ -23,9 +62,9 @@ Which appears in the first few lines of the script.
 
 ## Uninstall
 
-To uninstall the trash can, run the command:
+To uninstall the trash can, run the following command:
 ```
-$ del --uninstall
+trash --uninstall
 ```
 
 This will remove the trash can directory and all of its contents.

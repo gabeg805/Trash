@@ -4,15 +4,15 @@
 # File: trash
 # Author: Gabe Gonzalez
 #         
-# Brief: Delete files, list the contents of the trash, recover previously
-#        deleted files, and more.
+# Brief: Delete and recover files, list the contents and size of the trash, and
+#        more.
 # 
 # ------------------------------------------------------------------------------
 
 ##
-# Source utilities.
+# Project name.
 ##
-. "io.sh"
+PROJECT="${0##*/}"
 
 ##
 # Files/directories
@@ -45,8 +45,6 @@ EXIT_TRASH_PROMPT_INDEX_INVALID=13
 ##
 main()
 {
-    local short="hlLr:s"
-    local long="help,empty,install,list,location,recover:,size,uninstall"
     if [ "${1}" == "-d" -o "${1}" == "--delete" ]
     then
         shift
@@ -54,7 +52,17 @@ main()
         exit $?
     fi
 
-    cli_parse "${PROJECT}" "${short}" "${long}" "${@}"
+    # Parse options
+    local short="hlLr:s"
+    local long="help,empty,install,list,location,recover:,size,uninstall"
+    local args=$(getopt -o "${short}" --long "${long}" --name "${PROJECT}" \
+                        -- "${@}")
+    if [ $? -ne 0 ]
+    then
+        usage
+        exit 1
+    fi
+    eval set -- "${args}"
 
     while true
     do
@@ -63,40 +71,28 @@ main()
                 usage
                 exit 0
                 ;;
-
             --empty)
                 EMPTY=true
                 ;;
-
             --install)
                 INSTALL=true
                 ;;
-
             -l|--list)
-                LIST=
+                LIST=true
                 ;;
-
             -L|--location)
                 LOCATION=true
                 ;;
-
             -r|--recover)
                 shift
                 RECOVER="${1}"
                 ;;
-
             -s|--size)
                 SIZE=true
                 ;;
-
             --uninstall)
                 UNINSTALL=true
                 ;;
-
-            --)
-                break
-                ;;
-
             *)
                 break
                 ;;
@@ -107,7 +103,8 @@ main()
     # Run checks
     if [ ! -d "${TRASH_SHARE_DIR}" -a -z "${INSTALL}" ]
     then
-        print_err "Trash has not been installed yet. See --install for more info."
+        echo "${PROJECT}: Trash has not been installed yet." 1>&2
+        echo "${PROJECT}: See '--install' for more info." 1>&2
         exit ${EXIT_TRASH_DOES_NOT_EXIST}
     fi
 
@@ -135,10 +132,10 @@ main()
         trash_uninstall
     else
         usage
-        exit ${EXIT_NO_OPT_ENTERED}
+        return ${EXIT_NO_OPT_ENTERED}
     fi
 
-    exit $?
+    return $?
 }
 
 ##
@@ -183,7 +180,7 @@ usage()
 ##
 trash_install()
 {
-    print_info "Installing the trash can."
+    echo ":: Installing the trash can."
     mkdir -pv "${TRASH_SHARE_DIR}"
     return $?
 }
@@ -200,14 +197,14 @@ trash_delete()
     do
         if [ ! -e "${file}" ]
         then
-            print_err "File '${file}' does not exist."
+            echo "${PROJECT}: File '${file}' does not exist." 1>&2
             continue
         fi
         if [ ! -d "${dest}" ]
         then
             mkdir -p "${dest}"
         fi
-        print_info "Deleting '${file}'."
+        echo ":: Deleting '${file}'."
         local name=$(basename "${file}")-"${now}"
         mv "${file}" "${dest}/${name}"
     done
@@ -224,11 +221,11 @@ trash_empty()
     read -p "> " response
     case "${response}" in
         y|Y|yes|Yes|YES)
-            print_info "Emptying trash can."
+            echo ":: Emptying trash can."
             rm -rfv "${TRASH_SHARE_DIR}"/*
             ;;
         *)
-            print_info "Exiting."
+            echo ":: Exiting."
             ;;
     esac
     return $?
@@ -262,16 +259,14 @@ trash_recover()
     local IFS=$'\n'
     local matches=($(trash_recovery_get_matches "${file}"))
     local index=
-    local fullrecfile=
-    local baserecfile=
     trash_recovery_prompt "${matches[@]}" || return $?
     read -p "> " index
     trash_recovery_prompt_valid "${index}" "${#matches[@]}"
-    fullrecfile="${matches[$[${index}-1]]}"
-    baserecfile=$(basename "${fullrecfile}")
+    local fullrecfile="${matches[$[${index}-1]]}"
+    local baserecfile=$(basename "${fullrecfile}")
     baserecfile="${baserecfile%-*}"
     echo 
-    print_info "Recovering '${baserecfile}'."
+    echo ":: Recovering '${baserecfile}'."
     mv "${TRASH_SHARE_DIR}/${fullrecfile}" "${baserecfile}"
 }
 
@@ -290,7 +285,7 @@ trash_size()
 ##
 trash_uninstall()
 {
-    print_info "Uninstalling trash can at: '${TRASH_SHARE_DIR}'."
+    echo ":: Uninstalling trash can at: '${TRASH_SHARE_DIR}'."
     rm -rf "${TRASH_SHARE_DIR}"
     return $?
 }
@@ -300,13 +295,13 @@ trash_uninstall()
 ##
 trash_recovery_prompt()
 {
-    local matches=("${@}")
-    if [ $? -ne 0 ]
+    if [ $# -eq 0 ]
     then
-        print_err "No files matching '${file}' found."
+        echo "${PROJECT}: No files matching '${file}' found." 1>&2
         return ${EXIT_TRASH_RECOVER_FILE_NOT_FOUND}
     fi
 
+    local matches=("${@}")
     echo "Which file would you like to recover?"
     echo
     local len=$(echo -n "${#matches[@]}" | wc -c)
@@ -347,16 +342,15 @@ trash_recovery_prompt_valid()
     local max="${2}"
     if [ -z "${index}" ]
     then
-        print_info "Exiting."
+        echo ":: Exiting."
         return ${EXIT_SUCCESS}
     fi
     if ! is_integer "${index}" || \
         [ ${index} -lt 1 -o ${index} -gt ${max} ]
     then
-        print_err "Unable to recover file: Invalid value entered."
+        echo "${PROJECT}: Unable to recover file: Invalid value entered." 1>&2
         return ${EXIT_TRASH_PROMPT_INDEX_INVALID}
     fi
-
 }
 
 ##
