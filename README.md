@@ -7,7 +7,7 @@ more.
 
 ## Usage
 
-### Delete files
+### Delete one or more files
 
 ```
 trash -d file1 file2 ...
@@ -21,18 +21,21 @@ trash -r file
 
 ### Print size
 
+Prints the size of the trash can.
 ```
 trash -s
 ```
 
 ### List contents
 
+Prints the entire contents of the trash can.
 ```
 trash -l
 ```
 
-### Print location of trash can
+### Print location
 
+Prints the full path of where the trash can is located.
 ```
 trash -L
 ```
