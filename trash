@@ -35,7 +35,6 @@ UNINSTALL=
 ##
 # Exit statuses.
 ##
-EXIT_NO_OPT_ENTERED=10
 EXIT_TRASH_DOES_NOT_EXIST=11
 EXIT_TRASH_RECOVER_FILE_NOT_FOUND=12
 EXIT_TRASH_PROMPT_INDEX_INVALID=13
@@ -131,8 +130,7 @@ main()
     then
         trash_uninstall
     else
-        usage
-        return ${EXIT_NO_OPT_ENTERED}
+        :
     fi
 
     return $?
