@@ -48,18 +48,21 @@ main()
     then
         shift
         trash_delete "${@}"
-        exit $?
+        return $?
     fi
 
-    # Parse options
+	# Options
     local short="hlLr:s"
     local long="help,empty,install,list,location,recover:,size,uninstall"
-    local args=$(getopt -o "${short}" --long "${long}" --name "${PROJECT}" \
-                        -- "${@}")
+	local args=
+
+    # Parse options
+    args=$(getopt -o "${short}" --long "${long}" --name "${PROJECT}" \
+				-- "${@}")
     if [ $? -ne 0 ]
     then
         usage
-        exit 1
+        return 1
     fi
     eval set -- "${args}"
 
@@ -104,7 +107,7 @@ main()
     then
         echo "${PROJECT}: Trash has not been installed yet." 1>&2
         echo "${PROJECT}: See '--install' for more info." 1>&2
-        exit ${EXIT_TRASH_DOES_NOT_EXIST}
+        return ${EXIT_TRASH_DOES_NOT_EXIST}
     fi
 
     # Run options
