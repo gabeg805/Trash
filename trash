@@ -346,9 +346,11 @@ trash_recovery_prompt_valid()
         echo ":: Exiting."
         return ${EXIT_SUCCESS}
     fi
-    if ! is_integer "${index}" || \
-        [ ${index} -lt 1 -o ${index} -gt ${max} ]
+    if [ "${index}" -eq "${index}" ] 2> /dev/null \
+		&& [ ${index} -ge 1 -a ${index} -le ${max} ]
     then
+		:
+	else
         echo "${PROJECT}: Unable to recover file: Invalid value entered." 1>&2
         return ${EXIT_TRASH_PROMPT_INDEX_INVALID}
     fi
